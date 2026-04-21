@@ -14,17 +14,73 @@ app.use(express.json());
 // Expose uploads directory to the public
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ Auto-Migration: Add dp column to students table if not exists
+// ✅ Auto-Migration: Setup Tables & Columns
 db.query(
     "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'dp'",
     (err, result) => {
         if (!err && result[0].count === 0) {
-            db.query("ALTER TABLE students ADD COLUMN dp VARCHAR(255)", (err2) => {
-                if (!err2) console.log("✅ Auto Migration: Added 'dp' column to students table.");
-            });
+            db.query("ALTER TABLE students ADD COLUMN dp VARCHAR(255)", () => console.log("✅ Added 'dp' column."));
         }
     }
 );
+
+db.query(
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'usn'",
+    (err, result) => {
+        if (!err && result[0].count > 0) {
+            db.query("ALTER TABLE students DROP COLUMN usn", () => console.log("✅ Dropped 'usn' column."));
+        }
+    }
+);
+
+db.query(
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'department'",
+    (err, result) => {
+        if (!err && result[0].count === 0) {
+            db.query("ALTER TABLE students ADD COLUMN department VARCHAR(50)", (err2) => {
+                if (!err2) {
+                    console.log("✅ Added 'department' column.");
+                    db.query("UPDATE students SET department = ELT(FLOOR(1 + (RAND() * 12)), 'CSE','ISE','ECE','CV','MECH','ETE','AI/ML','CSD','CG','CY','MATH','BT') WHERE department IS NULL", (err3) => {
+                        if (!err3) console.log("✅ Backfilled departments for all students safely!");
+                    });
+                }
+            });
+        } else {
+             // In case column was there, ensure everyone has a department
+             db.query("UPDATE students SET department = ELT(FLOOR(1 + (RAND() * 12)), 'CSE','ISE','ECE','CV','MECH','ETE','AI/ML','CSD','CG','CY','MATH','BT') WHERE department IS NULL OR department = ''", () => {});
+        }
+    }
+);
+
+db.query(
+    "CREATE TABLE IF NOT EXISTS settings (setting_key VARCHAR(50) PRIMARY KEY, setting_value VARCHAR(255))",
+    (err) => {
+        if (!err) {
+            db.query("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('admin_code', '000000')");
+        }
+    }
+);
+
+// ✅ Auth Routes
+app.post('/api/auth/verify', (req, res) => {
+    const { code } = req.body;
+    db.query("SELECT setting_value FROM settings WHERE setting_key = 'admin_code'", (err, result) => {
+        if (err) return res.status(500).send(err);
+        if (result.length > 0 && result[0].setting_value === code) {
+            res.json({ success: true });
+        } else {
+            res.json({ success: false, message: 'Invalid Admin Code' });
+        }
+    });
+});
+
+app.post('/api/auth/update', (req, res) => {
+    const { newCode } = req.body;
+    db.query("UPDATE settings SET setting_value = ? WHERE setting_key = 'admin_code'", [newCode], (err) => {
+        if (err) return res.status(500).send(err);
+        res.send('Admin code updated successfully ✅');
+    });
+});
 
 // Routes
 app.use('/api/students', studentRoutes);
@@ -97,6 +153,106 @@ app.post('/api/allocate', (req, res) => {
     );
 });
 
+
+// ================== SMART AUTO ALLOCATE ==================
+app.post('/api/smart-allocate', (req, res) => {
+    // 1. Get all unassigned students
+    db.query('SELECT * FROM students WHERE room_id IS NULL', (err, unassignedStudents) => {
+        if (err) return res.status(500).send(err);
+        if (unassignedStudents.length === 0) return res.send('No unassigned students found ✅');
+
+        // 2. Get all rooms with space
+        db.query('SELECT * FROM rooms WHERE occupied_count < capacity', (err, availableRooms) => {
+            if (err) return res.status(500).send(err);
+            if (availableRooms.length === 0) return res.send('Room Capacity Full ❌');
+
+            // 3. Get mapping of what departments are in what room
+            db.query('SELECT room_id, department FROM students WHERE room_id IS NOT NULL', (err, occupants) => {
+                if (err) return res.status(500).send(err);
+
+                let roomDepts = {};
+                occupants.forEach(occ => {
+                    if (!roomDepts[occ.room_id]) roomDepts[occ.room_id] = new Set();
+                    if (occ.department) roomDepts[occ.room_id].add(occ.department);
+                });
+
+                let updates = [];
+                let roomCapacities = {};
+                let roomIsEmpty = {};
+                availableRooms.forEach(r => {
+                    roomCapacities[r.id] = r.capacity - r.occupied_count;
+                    roomIsEmpty[r.id] = (r.occupied_count === 0);
+                });
+
+                let deptGroups = {};
+                unassignedStudents.forEach(s => {
+                    let d = s.department || 'UNKNOWN';
+                    if (!deptGroups[d]) deptGroups[d] = [];
+                    deptGroups[d].push(s);
+                });
+
+                let sortedDepts = Object.keys(deptGroups).sort((a,b) => deptGroups[b].length - deptGroups[a].length);
+
+                for (let dept of sortedDepts) {
+                    for (let student of deptGroups[dept]) {
+                        let assignedRoomId = null;
+                        let targetDept = student.department;
+
+                        // Pass 1: Same Department Room
+                        for (let r of availableRooms) {
+                            if (roomCapacities[r.id] > 0 && roomDepts[r.id] && roomDepts[r.id].has(targetDept)) {
+                                assignedRoomId = r.id;
+                                break;
+                            }
+                        }
+
+                        // Pass 2: Completely Empty Room
+                        if (!assignedRoomId) {
+                            for (let r of availableRooms) {
+                                if (roomCapacities[r.id] > 0 && roomIsEmpty[r.id]) {
+                                    assignedRoomId = r.id;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Pass 3: Random Available Space
+                        if (!assignedRoomId) {
+                            for (let r of availableRooms) {
+                                if (roomCapacities[r.id] > 0) {
+                                    assignedRoomId = r.id;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (assignedRoomId) {
+                            roomCapacities[assignedRoomId]--;
+                            roomIsEmpty[assignedRoomId] = false;
+                            
+                            if (!roomDepts[assignedRoomId]) roomDepts[assignedRoomId] = new Set();
+                            if (targetDept) roomDepts[assignedRoomId].add(targetDept);
+
+                            updates.push(new Promise((resolve, reject) => {
+                                db.query('UPDATE students SET room_id = ? WHERE id = ?', [assignedRoomId, student.id], (err) => {
+                                    if (err) return reject(err);
+                                    db.query('UPDATE rooms SET occupied_count = occupied_count + 1 WHERE id = ?', [assignedRoomId], (err2) => {
+                                        if (err2) return reject(err2);
+                                        resolve();
+                                    });
+                                });
+                            }));
+                        }
+                    }
+                }
+
+                Promise.all(updates).then(() => {
+                    res.send(`Auto Assigned ${updates.length} students successfully ✅`);
+                }).catch(err => res.status(500).send(err));
+            });
+        });
+    });
+});
 
 // ================== DEALLOCATE ==================
 

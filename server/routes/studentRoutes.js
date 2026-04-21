@@ -26,12 +26,12 @@ const upload = multer({
 
 // Add student
 router.post('/add', upload.single('dp'), (req, res) => {
-    const { name, phone, email, gender } = req.body;
+    const { name, department, phone, email, gender } = req.body;
     const dp = req.file ? req.file.filename : null;
 
     db.query(
-        'INSERT INTO students (name, phone, email, gender, dp) VALUES (?, ?, ?, ?, ?)',
-        [name, phone, email, gender, dp],
+        'INSERT INTO students (name, department, phone, email, gender, dp) VALUES (?, ?, ?, ?, ?, ?)',
+        [name, department, phone, email, gender, dp],
         (err, result) => {
             if (err) return res.status(500).send(err);
             res.send('Student Added ✅');
@@ -51,14 +51,14 @@ router.get('/', (req, res) => {
 // ================== UPDATE STUDENT (ADDED) ==================
 
 router.put('/:id', upload.single('dp'), (req, res) => {
-    const { name, email } = req.body;
+    const { name, email, department } = req.body;
     const id = req.params.id;
     const dp = req.file ? req.file.filename : null;
 
     if (dp) {
         db.query(
-            'UPDATE students SET name = ?, email = ?, dp = ? WHERE id = ?',
-            [name, email, dp, id],
+            'UPDATE students SET name = ?, email = ?, department = ?, dp = ? WHERE id = ?',
+            [name, email, department, dp, id],
             (err, result) => {
                 if (err) return res.status(500).send(err);
                 if (result.affectedRows === 0) return res.send('Student not found ❌');
@@ -67,8 +67,8 @@ router.put('/:id', upload.single('dp'), (req, res) => {
         );
     } else {
         db.query(
-            'UPDATE students SET name = ?, email = ? WHERE id = ?',
-            [name, email, id],
+            'UPDATE students SET name = ?, email = ?, department = ? WHERE id = ?',
+            [name, email, department, id],
             (err, result) => {
                 if (err) return res.status(500).send(err);
                 if (result.affectedRows === 0) return res.send('Student not found ❌');
