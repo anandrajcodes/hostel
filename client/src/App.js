@@ -12,7 +12,7 @@ function App() {
   
   const [selectedRoom, setSelectedRoom] = useState(null);
 
-  const [student, setStudent] = useState({ name: "", phone: "", email: "", gender: "Male" });
+  const [student, setStudent] = useState({ name: "", phone: "", email: "", gender: "Male", dp: null });
   const [room, setRoom] = useState({ room_number: "", capacity: "" });
   const [alloc, setAlloc] = useState({ student_id: "", room_id: "" });
 
@@ -21,7 +21,8 @@ function App() {
   const [editData, setEditData] = useState({
     id: "",
     name: "",
-    email: ""
+    email: "",
+    dp: null
   });
 
   const API = "http://localhost:5000";
@@ -38,9 +39,16 @@ function App() {
   useEffect(() => { fetchData(); }, []);
 
   const addStudent = async () => {
-    const res = await axios.post(`${API}/api/students/add`, student);
+    const formData = new FormData();
+    formData.append('name', student.name);
+    formData.append('phone', student.phone);
+    formData.append('email', student.email);
+    formData.append('gender', student.gender);
+    if (student.dp) formData.append('dp', student.dp);
+
+    const res = await axios.post(`${API}/api/students/add`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
     toast.success(res.data); // ✅ updated
-    setStudent({ name: "", phone: "", email: "", gender: "Male" });
+    setStudent({ name: "", phone: "", email: "", gender: "Male", dp: null });
     fetchData();
   };
 
@@ -89,13 +97,15 @@ function App() {
       return;
     }
 
-    const res = await axios.put(`${API}/api/students/${editData.id}`, {
-      name: editData.name,
-      email: editData.email
-    });
+    const formData = new FormData();
+    formData.append('name', editData.name);
+    formData.append('email', editData.email);
+    if (editData.dp) formData.append('dp', editData.dp);
+
+    const res = await axios.put(`${API}/api/students/${editData.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
 
     toast.success(res.data); // ✅ updated
-    setEditData({ id: "", name: "", email: "" });
+    setEditData({ id: "", name: "", email: "", dp: null });
     fetchData();
   };
 
@@ -171,6 +181,7 @@ function App() {
               <div className="form-stack">
                 <input placeholder="Name" value={student.name} onChange={e => setStudent({...student, name: e.target.value})} />
                 <input placeholder="Email" value={student.email} onChange={e => setStudent({...student, email: e.target.value})} />
+                <input type="file" accept="image/*" onChange={e => setStudent({...student, dp: e.target.files[0]})} />
                 <button className="btn btn-dark" onClick={addStudent}>Register</button>
               </div>
             </section>
@@ -223,6 +234,7 @@ function App() {
                 <h3>Edit Student</h3>
                 <input value={editData.name} onChange={(e)=>setEditData({...editData,name:e.target.value})}/>
                 <input value={editData.email} onChange={(e)=>setEditData({...editData,email:e.target.value})}/>
+                <input type="file" accept="image/*" onChange={(e)=>setEditData({...editData, dp: e.target.files[0]})} />
                 <button className="btn btn-dark" onClick={updateStudent}>Update</button>
               </section>
             )}
@@ -232,16 +244,18 @@ function App() {
           <div className="list-column">
             <section className="ui-card">
 
-              <div style={{display:"flex", justifyContent:"space-between", padding:"10px 0", fontWeight:"bold"}}>
-                <span>Name</span>
-                <span>Edit | Delete | Move</span>
+              <div style={{display:"flex", justifyContent:"space-between", padding:"15px 10px", fontWeight:"700", fontSize: "1.3rem", borderBottom: "2px solid #eee", marginBottom: "15px", color: "#444"}}>
+                <span style={{ marginLeft: "15px" }}>Name</span>
+                <span style={{ marginRight: "10px" }}>Delete | Move | Edit</span>
               </div>
 
               <div className="table-wrapper">
                 {students.filter(s => s.name.toLowerCase().includes(search.toLowerCase())).map(s => (
                   <div className="table-row" key={s.id}>
                     <div className="user-info">
-                      <div className="avatar">{s.name.charAt(0)}</div>
+                      <div className="avatar">
+                        {s.dp ? <img src={`${API}/uploads/${s.dp}`} alt="dp" style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover'}} /> : s.name.charAt(0)}
+                      </div>
                       <div>
                         <div className="user-name">{s.name}</div>
                         <div className="user-meta">{s.email}</div>
@@ -296,6 +310,95 @@ function App() {
           autoClose={2000}
         />
 
+        {/* ✅ INJECTED CUSTOM STYLES TO ENLARGE NAME PALETTE & BUTTONS */}
+        <style>{`
+          .user-info {
+            gap: 15px !important;
+          }
+          .user-name {
+            font-size: 1.4rem !important;
+            font-weight: 700 !important;
+            color: #222 !important;
+          }
+          .user-meta {
+            font-size: 1.1rem !important;
+            color: #555 !important;
+          }
+          .avatar {
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 1.6rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .table-row {
+            padding: 15px !important;
+            align-items: center !important;
+          }
+          .row-actions {
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+          }
+          .row-actions button {
+            font-size: 1.4rem !important;
+            padding: 8px 14px !important;
+            border-radius: 8px !important;
+            border: 1px solid #ccc !important;
+            background: #fff !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease-in-out !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .row-actions button:hover {
+            transform: scale(1.15) !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+            border-color: #888 !important;
+          }
+          .tag {
+            font-size: 1.1rem !important;
+            padding: 6px 12px !important;
+            border-radius: 20px !important;
+          }
+          
+          /* ✅ ENLARGED LEFT PANEL (FORMS & CARDS) */
+          .ui-card {
+            padding: 25px !important;
+            border-radius: 14px !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
+          }
+          .ui-card h3 {
+            font-size: 1.5rem !important;
+            margin-bottom: 20px !important;
+            font-weight: 700 !important;
+            color: #222 !important;
+          }
+          .form-stack {
+            gap: 18px !important;
+          }
+          .form-stack input, .form-stack select {
+            padding: 14px 16px !important;
+            font-size: 1.25rem !important;
+            border-radius: 10px !important;
+            border: 1px solid #ddd !important;
+            background: #fbfbfb !important;
+          }
+          .form-stack .btn {
+            padding: 14px 20px !important;
+            font-size: 1.3rem !important;
+            font-weight: bold !important;
+            border-radius: 10px !important;
+            transition: all 0.2s ease-in-out !important;
+            margin-top: 5px !important;
+          }
+          .form-stack .btn:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important;
+          }
+        `}</style>
       </main>
     </div>
   );
