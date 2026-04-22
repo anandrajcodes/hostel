@@ -78,6 +78,17 @@ function App() {
     }
   };
 
+  const smartShuffle = async () => {
+    try {
+      toast.info("🔀 Smart Shuffling students by department...");
+      const res = await axios.post(`${API}/api/smart-shuffle`);
+      toast.success(res.data);
+      fetchData();
+    } catch(err) {
+      toast.error("Smart Shuffle Error");
+    }
+  };
+
   const deallocate = async (id) => {
     const res = await axios.post(`${API}/api/deallocate`, { student_id: id });
     toast.success(res.data);
@@ -176,11 +187,23 @@ function App() {
 
       {/* 🚀 2. ROLE SELECTION VIEW */}
       {appView === "role" && (
-        <div className="center-view fade-in">
-          <h2 style={{ fontSize: "3rem", marginBottom: "40px", color: "#333" }}>Are you a Student or an Admin?</h2>
-          <div style={{ display: "flex", gap: "30px" }}>
-            <button className="role-btn" onClick={() => setAppView("student")}>🎓 Student</button>
-            <button className="role-btn admin-role-btn" onClick={() => setAppView("admin_auth")}>🛡️ Admin</button>
+        <div className="role-view fade-in">
+          <div className="role-content">
+            <div className="brand" style={{ marginBottom: "25px", justifyContent: "center", display: "flex", alignItems: "center", gap: "15px", color: "#fff", textShadow: "0 2px 10px rgba(0,0,0,0.5)"}}>
+               <div className="logo-icon" style={{ width: "60px", height: "60px", fontSize: "2rem", background: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.4)", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>H</div>
+               <span style={{ fontSize: "3.5rem" }}>Hostel<b>Hub</b></span>
+             </div>
+            <h2 style={{ fontSize: "2.8rem", marginBottom: "50px", color: "#fff", textShadow: "0 4px 15px rgba(0,0,0,0.6)", fontWeight: "600", textAlign: "center" }}>Select Your Role</h2>
+            <div style={{ display: "flex", gap: "50px", justifyContent: "center" }}>
+              <button className="role-btn" onClick={() => setAppView("student")}>
+                <span style={{ fontSize: "4.5rem", marginBottom: "10px" }}>🎓</span>
+                <span>Student</span>
+              </button>
+              <button className="role-btn admin-role-btn" onClick={() => setAppView("admin_auth")}>
+                <span style={{ fontSize: "4.5rem", marginBottom: "10px" }}>🛡️</span>
+                <span>Admin</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -327,7 +350,10 @@ function App() {
                     </select>
                     <div style={{ display: "flex", gap: "10px" }}>
                       <button className="btn btn-dark" style={{ flex: 1 }} onClick={allocate}>Assign Room</button>
-                      <button className="btn btn-outline" style={{ background: "#f1c40f", border: "none", color: "#222", padding: "10px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", transition: "0.2s" }} onClick={autoAssign}>⚡ Auto Assign</button>
+                    </div>
+                    <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                      <button className="btn btn-outline" style={{ flex: 1, background: "#f1c40f", border: "none", color: "#222", padding: "10px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", transition: "0.2s" }} onClick={autoAssign}>⚡ Auto Assign</button>
+                      <button className="btn btn-outline" style={{ flex: 1, background: "#3498db", border: "none", color: "#fff", padding: "10px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", transition: "0.2s" }} onClick={smartShuffle}>🔀 Smart Shuffle</button>
                     </div>
                   </div>
                 </section>
@@ -463,16 +489,17 @@ function App() {
           .door-left, .door-right {
              width: 50%;
              height: 100vh;
-             background: linear-gradient(135deg, #181818, #2c2c2c);
-             border-right: 2px solid #000;
-             transition: transform 1.2s cubic-bezier(0.77, 0, 0.175, 1);
+             background: url('/wood.png') center/cover;
+             box-shadow: inset 0 0 80px rgba(0,0,0,0.9);
+             border-right: 4px solid #1a0a00;
+             transition: transform 1.4s cubic-bezier(0.77, 0, 0.175, 1);
              position: relative;
-             box-shadow: inset -10px 0 30px rgba(0,0,0,0.6);
           }
           .door-right {
-             border-left: 2px solid #000;
+             border-left: 4px solid #1a0a00;
              border-right: none;
-             box-shadow: inset 10px 0 30px rgba(0,0,0,0.6);
+             box-shadow: inset 0 0 80px rgba(0,0,0,0.9);
+             background-position: right center;
           }
           .door-left.open {
              transform: translateX(-100%);
@@ -483,15 +510,16 @@ function App() {
           .door-handle-left, .door-handle-right {
              position: absolute;
              top: 50%;
-             width: 14px;
-             height: 90px;
-             background: linear-gradient(to bottom, #d4af37, #b28a2a);
-             border-radius: 4px;
-             box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+             width: 25px;
+             height: 180px;
+             background: linear-gradient(to right, #d4af37, #fdf0a6, #b28a2a);
+             border-radius: 12px;
+             box-shadow: 5px 5px 15px rgba(0,0,0,0.9), inset -2px -2px 6px rgba(0,0,0,0.4), inset 2px 2px 6px rgba(255,255,255,0.6);
              transform: translateY(-50%);
+             z-index: 10;
           }
-          .door-handle-left { right: 25px; }
-          .door-handle-right { left: 25px; }
+          .door-handle-left { right: 35px; }
+          .door-handle-right { left: 35px; }
           
           .welcome-title {
              color: #fff;
@@ -523,6 +551,36 @@ function App() {
           }
 
           /* ROLE VIEW */
+          .role-view {
+             width: 100vw; height: 100vh;
+             background: url('/hostel_bg.png') center/cover no-repeat;
+             position: absolute; inset: 0; z-index: 100;
+             display: flex; flex-direction: column;
+             justify-content: center; align-items: center;
+             overflow: hidden;
+          }
+          .role-view::before {
+             content: "";
+             position: absolute;
+             inset: 0;
+             background: inherit;
+             filter: blur(12px) brightness(0.7);
+             z-index: -1;
+             transform: scale(1.05);
+          }
+          .role-content {
+             position: relative;
+             z-index: 10;
+             display: flex; flex-direction: column;
+             align-items: center;
+             background: rgba(255, 255, 255, 0.15);
+             padding: 60px 100px;
+             border-radius: 20px;
+             backdrop-filter: blur(25px);
+             -webkit-backdrop-filter: blur(25px);
+             border: 1px solid rgba(255, 255, 255, 0.4);
+             box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+          }
           .center-view {
              width: 100vw; height: 100vh;
              display: flex; flex-direction: column;
@@ -531,26 +589,34 @@ function App() {
              position: absolute; inset: 0; z-index: 100;
           }
           .role-btn {
-             padding: 30px 60px;
-             font-size: 2.2rem;
+             padding: 40px 60px;
+             font-size: 2.5rem;
              font-weight: 700;
-             border-radius: 16px;
+             border-radius: 20px;
              border: none;
              cursor: pointer;
-             background: #fff;
-             box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-             transition: all 0.3s;
+             background: rgba(255, 255, 255, 0.95);
+             box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
              color: #222;
              display: flex;
+             flex-direction: column;
              align-items: center;
              gap: 15px;
+             min-width: 280px;
           }
           .role-btn:hover {
-             transform: translateY(-8px);
-             box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+             transform: translateY(-12px) scale(1.05);
+             box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+             background: #fff;
           }
           .admin-role-btn {
-             border: 3px solid #222;
+             background: rgba(20, 20, 20, 0.9);
+             color: #fff;
+             border: 1px solid rgba(255,255,255,0.2);
+          }
+          .admin-role-btn:hover {
+             background: #000;
           }
 
           /* STUDENT UI */

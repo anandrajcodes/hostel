@@ -254,6 +254,104 @@ app.post('/api/smart-allocate', (req, res) => {
     });
 });
 
+// ================== SMART SHUFFLE ==================
+app.post('/api/smart-shuffle', (req, res) => {
+    // 1. Get all ASSIGNED students
+    db.query('SELECT * FROM students WHERE room_id IS NOT NULL', (err, assignedStudents) => {
+        if (err) return res.status(500).send(err);
+        if (assignedStudents.length === 0) return res.send('No assigned students found ✅');
+
+        // 2. Get all rooms
+        db.query('SELECT * FROM rooms', (err, rooms) => {
+            if (err) return res.status(500).send(err);
+            if (rooms.length === 0) return res.send('No rooms available ❌');
+
+            let updates = [];
+            let roomCapacities = {};
+            let roomIsEmpty = {};
+            let roomDepts = {};
+
+            // Reset capacities assuming all assigned students are temporarily unassigned in memory
+            rooms.forEach(r => {
+                roomCapacities[r.id] = r.capacity; 
+                roomIsEmpty[r.id] = true;
+                roomDepts[r.id] = new Set();
+            });
+
+            // Group assigned students by dept
+            let deptGroups = {};
+            assignedStudents.forEach(s => {
+                let d = s.department || 'UNKNOWN';
+                if (!deptGroups[d]) deptGroups[d] = [];
+                deptGroups[d].push(s);
+            });
+
+            let sortedDepts = Object.keys(deptGroups).sort((a,b) => deptGroups[b].length - deptGroups[a].length);
+
+            // Calculate new assignments
+            for (let dept of sortedDepts) {
+                for (let student of deptGroups[dept]) {
+                    let assignedRoomId = null;
+                    let targetDept = student.department;
+
+                    // Pass 1: Same Department Room
+                    for (let r of rooms) {
+                        if (roomCapacities[r.id] > 0 && roomDepts[r.id].has(targetDept)) {
+                            assignedRoomId = r.id;
+                            break;
+                        }
+                    }
+
+                    // Pass 2: Completely Empty Room
+                    if (!assignedRoomId) {
+                        for (let r of rooms) {
+                            if (roomCapacities[r.id] > 0 && roomIsEmpty[r.id]) {
+                                assignedRoomId = r.id;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Pass 3: Random Available Space
+                    if (!assignedRoomId) {
+                        for (let r of rooms) {
+                            if (roomCapacities[r.id] > 0) {
+                                assignedRoomId = r.id;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (assignedRoomId) {
+                        roomCapacities[assignedRoomId]--;
+                        roomIsEmpty[assignedRoomId] = false;
+                        if (targetDept) roomDepts[assignedRoomId].add(targetDept);
+
+                        updates.push(new Promise((resolve, reject) => {
+                            db.query('UPDATE students SET room_id = ? WHERE id = ?', [assignedRoomId, student.id], (err) => {
+                                if (err) return reject(err);
+                                resolve();
+                            });
+                        }));
+                    }
+                }
+            }
+
+            Promise.all(updates).then(() => {
+                // Update occupied_count of all rooms to reflect actual currently assigned students
+                db.query(`
+                    UPDATE rooms r
+                    SET occupied_count = (SELECT COUNT(*) FROM students s WHERE s.room_id = r.id)
+                `, (err) => {
+                    if (err) return res.status(500).send(err);
+                    res.send(`Smart Shuffled ${updates.length} students successfully ✅`);
+                });
+            }).catch(err => res.status(500).send(err));
+        });
+    });
+});
+
+
 // ================== DEALLOCATE ==================
 
 app.post('/api/deallocate', (req, res) => {
