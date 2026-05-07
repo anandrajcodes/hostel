@@ -25,10 +25,10 @@ db.query(
 );
 
 db.query(
-    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'usn'",
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'username'",
     (err, result) => {
         if (!err && result[0].count > 0) {
-            db.query("ALTER TABLE students DROP COLUMN usn", () => console.log("✅ Dropped 'usn' column."));
+            db.query("ALTER TABLE students CHANGE username usn VARCHAR(255) UNIQUE", () => console.log("✅ Renamed 'username' to 'usn' column."));
         }
     }
 );
@@ -48,6 +48,52 @@ db.query(
         } else {
              // In case column was there, ensure everyone has a department
              db.query("UPDATE students SET department = ELT(FLOOR(1 + (RAND() * 12)), 'CSE','ISE','ECE','CV','MECH','ETE','AI/ML','CSD','CG','CY','MATH','BT') WHERE department IS NULL OR department = ''", () => {});
+        }
+    }
+);
+
+db.query(
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'usn'",
+    (err, result) => {
+        if (!err && result[0].count === 0) {
+            db.query("ALTER TABLE students ADD COLUMN usn VARCHAR(255) UNIQUE", () => console.log("✅ Added 'usn' column."));
+        }
+    }
+);
+
+db.query(
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'password'",
+    (err, result) => {
+        if (!err && result[0].count === 0) {
+            db.query("ALTER TABLE students ADD COLUMN password VARCHAR(255)", () => console.log("✅ Added 'password' column."));
+        }
+    }
+);
+
+db.query(
+    "SELECT count(*) as count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'duration'",
+    (err, result) => {
+        if (!err && result[0].count === 0) {
+            db.query("ALTER TABLE students ADD COLUMN duration VARCHAR(50) DEFAULT '6 Months'", () => console.log("✅ Added 'duration' column."));
+        }
+    }
+);
+
+db.query(
+    "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = 'hostel_db' AND TABLE_NAME = 'students' AND COLUMN_NAME = 'paid_status'",
+    (err, result) => {
+        if (!err) {
+            if (result.length === 0) {
+                db.query("ALTER TABLE students ADD COLUMN paid_status VARCHAR(20) DEFAULT 'Not Paid'", () => console.log("✅ Added 'paid_status' column."));
+            } else if (result[0].DATA_TYPE === 'tinyint' || result[0].DATA_TYPE === 'boolean') {
+                db.query("ALTER TABLE students MODIFY COLUMN paid_status VARCHAR(20) DEFAULT 'Not Paid'", (err) => {
+                    if (!err) {
+                        db.query("UPDATE students SET paid_status = 'Paid' WHERE paid_status = '1'");
+                        db.query("UPDATE students SET paid_status = 'Not Paid' WHERE paid_status = '0'");
+                        console.log("✅ Converted 'paid_status' to VARCHAR.");
+                    }
+                });
+            }
         }
     }
 );
@@ -75,10 +121,17 @@ app.post('/api/auth/verify', (req, res) => {
 });
 
 app.post('/api/auth/update', (req, res) => {
-    const { newCode } = req.body;
-    db.query("UPDATE settings SET setting_value = ? WHERE setting_key = 'admin_code'", [newCode], (err) => {
+    const { oldCode, newCode } = req.body;
+    db.query("SELECT setting_value FROM settings WHERE setting_key = 'admin_code'", (err, result) => {
         if (err) return res.status(500).send(err);
-        res.send('Admin code updated successfully ✅');
+        if (result.length > 0 && result[0].setting_value === oldCode) {
+            db.query("UPDATE settings SET setting_value = ? WHERE setting_key = 'admin_code'", [newCode], (err) => {
+                if (err) return res.status(500).send(err);
+                res.json({ success: true, message: 'Admin code updated successfully ✅' });
+            });
+        } else {
+            res.json({ success: false, message: 'Invalid Previous Code ❌' });
+        }
     });
 });
 
